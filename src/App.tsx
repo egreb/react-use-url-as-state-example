@@ -7,67 +7,67 @@ import {
   useHistory,
 } from "react-router-dom";
 
+type Done = "yes" | "no";
+
 type Todo = {
   title: string;
-  done: IsDone;
+  done?: Done;
 };
 
 type Filter = {
   title?: string;
-  done?: IsDone;
+  done?: Done;
 };
 
-const Search = () => {
-  const { state, setState } = useUrl<Filter>();
-  const [search, setSearch] = React.useState(state.title);
+interface SearchProps {
+  defaultValue?: string;
+  onApply: (value: string) => void;
+}
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    setState({
-      ...state,
-      title: search,
-    });
-  };
-
+const Search = ({ onApply, defaultValue }: SearchProps) => {
   return (
-    <form onSubmit={handleSubmit}>
-      <input
-        type="search"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
+    <form
+      key={defaultValue}
+      onSubmit={(e) => {
+        e.preventDefault();
+        const search = new FormData(e.currentTarget).get("search");
+        if (typeof search === "string") {
+          onApply(search);
+        }
+      }}
+    >
+      <input type="search" name="search" defaultValue={defaultValue} />
       <button type="submit">search</button>
     </form>
   );
 };
 
-type IsDone = "yes" | "no" | "all";
-
-const DoneFilter = () => {
-  const { state, setState } = useUrl<Filter>();
-
+interface DoneFilterProps {
+  defaultValue?: Done;
+  onApply: (value: string) => void;
+}
+const DoneFilter = ({ defaultValue, onApply }: DoneFilterProps) => {
   return (
     <div>
       <label htmlFor="done">Done</label>
       <select
+        key={defaultValue as string}
         name="done"
-        onChange={(e) =>
-          setState({
-            ...state,
-            done: e.target.value as IsDone,
-          })
-        }
+        defaultValue={defaultValue as string}
+        onChange={(e) => {
+          onApply(e.target.value);
+        }}
       >
-        <option value="both"></option>
-        <option value="yes">True</option>
-        <option value="no">False</option>
+        <option></option>
+        <option value={"yes"}>True</option>
+        <option value={"no"}>False</option>
       </select>
     </div>
   );
 };
 
 const List = () => {
-  const { state } = useUrl<Filter>();
+  const { state, setState } = useUrl<Filter>();
   console.log({ done: Boolean(state.done) });
 
   const todos: Array<Todo> = [
@@ -80,6 +80,7 @@ const List = () => {
       done: "no",
     },
   ];
+  console.log(state.title);
 
   let filtered = state.title
     ? todos.filter((t) => t.title == state.title)
@@ -90,8 +91,24 @@ const List = () => {
 
   return (
     <div>
-      <Search />
-      <DoneFilter />
+      <Search
+        defaultValue={state.title}
+        onApply={(value) => {
+          setState({
+            ...state,
+            title: value,
+          });
+        }}
+      />
+      <DoneFilter
+        defaultValue={state.done}
+        onApply={(value) => {
+          setState({
+            ...state,
+            done: value as Done,
+          });
+        }}
+      />
       <ul>
         {filtered.map((t, index) => (
           <li key={index}>{t.title}</li>
@@ -116,6 +133,9 @@ function parseObjectToQueryString<T = object>(params: T): string {
   return (
     "?" +
     Object.keys(params)
+      .filter(
+        (key) => params[key as keyof T] !== undefined && params[key as keyof T]
+      )
       .map((key) => key + "=" + params[key as keyof T])
       .join("&")
   );
@@ -133,7 +153,9 @@ function useUrl<T = object>() {
   };
 
   history.listen((newLocation) => {
-    updateState(parseStringToObject<T>(newLocation.search));
+    if (location.search !== newLocation.search) {
+      updateState(parseStringToObject<T>(newLocation.search));
+    }
   });
 
   return { state, setState };
